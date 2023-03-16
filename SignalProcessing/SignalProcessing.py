@@ -31,37 +31,67 @@ def frequency_readings(n):
     return fft.fftshift(f_readings)
 
 
-def signal_sampling(n, sign, F_filter, Fs):
+def signal_quantization(sign, F_filter, Fs):
     params = calculation_of_filter_parameters(F_filter, Fs)
-    discrete_signals = []
-    discrete_spectrums = []
-    analog_signals = []
+    quantized_signals = []
     dispersions = []
     signals_noise = []
 
-    for Dt in [2, 4, 8, 16]:
-        discrete_signal = numpy.zeros(n)
-        for i in range(0, round(n / Dt)):
-            discrete_signal[i * Dt] = sign[i * Dt]
-        spectrum = fft.fft(discrete_signal)
-        discrete_spectrums += [list(numpy.abs(fft.fftshift(spectrum)))]
-        discrete_signals += [list(discrete_signal)]
-        qwe = signal.sosfiltfilt(params, discrete_signal)
+    for M in [4, 16, 64, 256]:
+        bits = []
+        delta = (numpy.max(sign) - numpy.min(sign)) / (M - 1)
+        quantize_signal = delta * numpy.round(sign / delta)
+        quantized_signals += [list(quantize_signal)]
+        quantize_levels = numpy.arange(numpy.min(quantize_signal), numpy.max(quantize_signal)+1, delta)
+        quantize_bit = numpy.arange(0, M)
+        quantize_bit = [format(bits, '0' + str(int(numpy.log(M) / numpy.log(2))) + 'b') for bits in quantize_bit]
+        quantize_table = numpy.c_[quantize_levels[:M], quantize_bit[:M]]
+        bits_table(M, quantize_table, f"Таблиця квантування для {M} рівнів")
+        for signal_value in quantize_signal:
+            for index, value in enumerate(quantize_levels[:M]):
+                if numpy.round(numpy.abs(signal_value - value), 0) == 0:
+                    bits.append(quantize_bit[index])
+                    break
+        bits = [int(item) for item in list(''.join(bits))]
+        displaying_the_bits(numpy.arange(0, len(bits)), bits, "Біти", "Амплітуда сигналу",
+                            f"кодова послідовність сигналу при кількості рівнів квантування {M}",
+                            grid=True)
+        qwe = signal.sosfiltfilt(params, quantize_signal)
         e1 = qwe - sign
         dispersion = numpy.var(e1)
         dispersions += [dispersion]
-        signals_noise += [numpy.var(sign)/dispersion]
-        analog_signals += [list(qwe)]
-    return discrete_signals, discrete_spectrums, analog_signals, dispersions, signals_noise
+        signals_noise += [numpy.var(sign) / dispersion]
+    return dispersions, signals_noise, quantized_signals
 
 
-def displaying_the_results(x, y, ox_txt, oy_txt, name):
+def bits_table(m, quantize_table, name):
+    fig, ax = plt.subplots(figsize=(14 / 2.54, m / 2.54))
+    table = ax.table(cellText=quantize_table, colLabels=['Значення сигналу', 'Кодова послідовність'], loc='center')
+    table.set_fontsize(14)
+    table.scale(1, 2)
+    ax.axis('off')
+    fig.savefig(f"./figures/{name}.png", dpi=600)
+
+
+def displaying_the_results(x, y, ox_txt, oy_txt, name, grid=False):
     fig, ax = plt.subplots(figsize=(21 / 2.54, 14 / 2.54))
     ax.plot(x, y, linewidth=1)
     ax.set_xlabel(ox_txt, fontsize=14)
     ax.set_ylabel(oy_txt, fontsize=14)
     plt.title(name, fontsize=14)
-    plt.grid()
+    if grid:
+        plt.grid()
+    fig.savefig(f"./figures/{name}.png", dpi=600)
+
+
+def displaying_the_bits(x, y, ox_txt, oy_txt, name, grid=False):
+    fig, ax = plt.subplots(figsize=(21 / 2.54, 14 / 2.54))
+    ax.step(x, y, linewidth=0.1)
+    ax.set_xlabel(ox_txt, fontsize=14)
+    ax.set_ylabel(oy_txt, fontsize=14)
+    plt.title(name, fontsize=14)
+    if grid:
+        plt.grid()
     fig.savefig(f"./figures/{name}.png", dpi=600)
 
 
@@ -88,27 +118,15 @@ def main():
     time_counts = determination_of_time_counts(n, Fs)
     filter_params = calculation_of_filter_parameters(F_max, Fs)
     f_sign = signal_filtering(filter_params, sign)
-    dis_sign, sp_sign, an_sign, dispersions, signals_noise = signal_sampling(n, f_sign, F_filter, Fs)
-    xt = frequency_readings(n)
-
-    # displaying_the_results(
-    #     time_counts, f_sign, "Час (с)", "Амплітуда сигналу", "Сигнал с максимальною частотою 11 Гц")
-    #
-    # y, x = calculation_of_the_signal_spectrum(f_sign, n)
-    #
-    # displaying_the_results(x, y, "Частота (Гц)", "Амплітуда спектру", "Спектр сигналу з максимальною частотою 11 Гц")
+    dispersion, signals_noise, quantized_signals = signal_quantization(f_sign, F_filter, Fs)
 
     displaying_the_results_2(
-        time_counts, dis_sign, "Час (секунди)", "Амплітуда сигналу", "Сигнал з кроком дискретизації Dt = (2, 4, 8, 16)")
-    displaying_the_results_2(
-        xt, sp_sign, "Частота (Гц)", "Амплітуда спектру", "Спектри сигналів з кроком дискретизації Dt = (2, 4, 8, 16)")
-    displaying_the_results_2(
-        time_counts, an_sign, "Час (секунди)", "Амплітуда сигналу",
-        "Відновлені аналогові сигнали з кроком дискретизації Dt = (2, 4, 8, 16)")
-    displaying_the_results([2, 4, 8, 16], dispersions, "Крок дискретизації",
-                           "Дисперсія", "Залежність дисперсії від кроку дискретизації")
-    displaying_the_results([2, 4, 8, 16], signals_noise, "Крок дискретизації",
-                           "ССШ", "Залежність співвідношення сигнал-шум від кроку дискретизації")
+        time_counts, quantized_signals, "Час (секунди)", "Амплітуда сигналу",
+        "Цифрові сигнали з рівнями квантування (4, 16, 64, 256)")
+    displaying_the_results([4, 16, 64, 256], dispersion, "Кількість рівнів квантування",
+                           "Дисперсія", "Залежність дисперсії від кількості рівнів квантування", grid=True)
+    displaying_the_results([4, 16, 64, 256], signals_noise, "Кількість рівнів квантування",
+                           "ССШ", "Залежність співвідношення сигнал-шум від кількості рівнів квантування", grid=True)
 
 
 if __name__ == "__main__":
