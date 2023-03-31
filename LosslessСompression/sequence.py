@@ -44,11 +44,9 @@ def sequence_4(surname, N_sequence):
     return original_sequence_4
 
 
-def sequence_5(N_sequence):
-    chars = list("Ди529")
-    generated_sequence = []
-    for i in range(N_sequence):
-        generated_sequence.append(random.choice(chars))
+def sequence_5(word):
+    chars = list(word)
+    generated_sequence = chars * 20
     random.shuffle(generated_sequence)
     original_sequence_5 = ''.join(generated_sequence)
     return original_sequence_5
@@ -117,7 +115,7 @@ def main():
     N_sequence = 100
     surname = "Дибко"
     original_sequences = [sequence_1(N1, N_sequence), sequence_2(surname, N_sequence), sequence_3(surname, N_sequence),
-                          sequence_4(surname, N_sequence), sequence_5(N_sequence), sequence_6(N_sequence),
+                          sequence_4(surname, N_sequence), sequence_5("Ди529"), sequence_6(N_sequence),
                           sequence_7(N_sequence), sequence_8(N_sequence)]
     results = []
     for sequence in original_sequences:
